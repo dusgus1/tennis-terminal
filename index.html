@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>tennis.exe — match analyzer v1.0</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap");
+:root{--g:#33ff33;--dg:#1a8c1a;--bg:#0a0a0a;--bg2:#0f0f0f;--border:#1f4d1f;--dim:#0d2b0d;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--g);font-family:"Share Tech Mono",monospace;font-size:13px;min-height:100vh;overflow-x:hidden;position:relative;}
+body::before{content:"";position:fixed;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.15) 2px,rgba(0,0,0,.15) 4px);pointer-events:none;z-index:9999;}
+body::after{content:"";position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.7) 100%);pointer-events:none;z-index:9998;}
+.crt-flicker{animation:flicker 8s infinite;}
+@keyframes flicker{0%,95%,100%{opacity:1;}96%{opacity:.97;}97%{opacity:1;}98%{opacity:.96;}99%{opacity:1;}}
+.header{border-bottom:1px solid var(--border);padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:var(--bg2);}
+.header-left{display:flex;flex-direction:column;gap:2px;}
+.sys-title{color:var(--g);font-size:15px;letter-spacing:2px;text-shadow:0 0 8px var(--g);}
+.sys-sub{color:var(--dg);font-size:11px;}
+.header-right{text-align:right;color:var(--dg);font-size:11px;line-height:1.6;}
+.blink{animation:blink .8s step-end infinite;}
+@keyframes blink{50%{opacity:0;}}
+.main{display:grid;grid-template-columns:1fr 380px;gap:0;height:calc(100vh - 44px);}
+@media(max-width:900px){.main{grid-template-columns:1fr;height:auto;}}
+.court-panel{border-right:1px solid var(--border);display:flex;flex-direction:column;}
+.panel-title{border-bottom:1px solid var(--border);padding:5px 12px;color:var(--dg);font-size:11px;letter-spacing:1px;background:var(--dim);}
+.court-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--bg);}
+canvas#court{display:block;}
+.right-col{display:flex;flex-direction:column;overflow:hidden;}
+.prob-panel{border-bottom:1px solid var(--border);}
+canvas#probchart{display:block;}
+.momentum-row{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);font-size:11px;}
+.mom-label{color:var(--dg);min-width:90px;}
+.mom-bar-outer{flex:1;height:6px;background:#0d1a0d;border:1px solid var(--border);position:relative;}
+.mom-bar-fill{height:100%;background:var(--g);box-shadow:0 0 6px var(--g);transition:width .4s ease;}
+.mom-val{min-width:38px;text-align:right;color:var(--g);}
+.score-panel{border-bottom:1px solid var(--border);padding:8px 12px;font-size:11px;}
+.score-grid{display:grid;grid-template-columns:110px repeat(5,1fr);gap:2px;margin-bottom:4px;}
+.sg-head{color:var(--dg);}
+.sg-p1{color:var(--g);}
+.sg-p2{color:#33cc33;}
+.sg-cur{color:var(--g);text-shadow:0 0 6px var(--g);}
+.serve-row{color:var(--dg);font-size:10px;margin-top:3px;}
+.serve-row span{color:var(--g);}
+.events-panel{border-bottom:1px solid var(--border);padding:8px 12px;flex-shrink:0;}
+.ev-title{color:var(--dg);font-size:11px;margin-bottom:6px;letter-spacing:1px;}
+.btn-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:5px;}
+button.cmd{background:var(--bg);border:1px solid var(--border);color:var(--g);font-family:"Share Tech Mono",monospace;font-size:11px;padding:4px 10px;cursor:pointer;letter-spacing:.5px;transition:all .1s;}
+button.cmd:hover{background:var(--dim);border-color:var(--g);box-shadow:0 0 6px var(--g);text-shadow:0 0 4px var(--g);}
+button.cmd:active{transform:scale(.97);}
+button.cmd.danger{border-color:#4d1a1a;color:#cc3333;}
+button.cmd.danger:hover{background:#1a0a0a;border-color:#cc3333;box-shadow:0 0 6px #cc3333;}
+button.cmd.ace{border-color:#1a4d1a;color:#33ff33;text-shadow:0 0 4px #33ff33;}
+.terminal-log{flex:1;overflow-y:auto;padding:8px 12px;background:var(--bg);font-size:11px;line-height:1.7;}
+.terminal-log::-webkit-scrollbar{width:4px;}
+.terminal-log::-webkit-scrollbar-thumb{background:var(--border);}
+.log-line{display:flex;gap:6px;opacity:0;animation:fadein .3s forwards;}
+@keyframes fadein{to{opacity:1;}}
+.log-ts{color:#1a6b1a;min-width:52px;}
+.log-prompt{color:var(--dg);}
+.log-txt{color:var(--g);}
+.log-txt.hi{color:#66ff66;text-shadow:0 0 4px #33ff33;}
+.log-txt.warn{color:#cccc33;}
+.log-txt.err{color:#cc3333;}
+.log-txt.ace{color:#33ff33;text-shadow:0 0 8px #33ff33;font-weight:bold;}
+</style>
+</head>
+<body class="crt-flicker">
+<div class="header">
+<div class="header-left">
+<div class="sys-title">[ TENNIS.EXE v1.0 ]<span class="blink">_</span></div>
+<div class="sys-sub">match_analyzer -- real-time probability engine -- dusgus1</div>
+</div>
+<div class="header-right">
+<div>SYS: <span id="sysstat">ONLINE</span> &nbsp; CPU: <span id="cpu">0%</span></div>
+<div>MATCH: <span id="matchstat">IN PROGRESS</span></div>
+</div>
+</div>
+<div class="main">
+<div class="court-panel">
+<div class="panel-title">&gt; /dev/court0 -- top-down view -- ball_tracker active</div>
+<div class="court-wrap"><canvas id="court"></canvas></div>
+</div>
+<div class="right-col">
+<div class="prob-panel">
+<div class="panel-title">&gt; win_probability.stream -- live feed</div>
+<canvas id="probchart" height="100"></canvas>
+</div>
+<div class="momentum-row">
+<span class="mom-label">MOMENTUM:</span>
+<div class="mom-bar-outer"><div class="mom-bar-fill" id="mombar" style="width:50%"></div></div>
+<span class="mom-val" id="momval">50%</span>
+</div>
+<div class="score-panel">
+<div class="score-grid">
+<span class="sg-head">&nbsp;</span><span class="sg-head">SET1</span><span class="sg-head">SET2</span><span class="sg-head">SET3</span><span class="sg-head">PTS</span><span class="sg-head">GAME</span>
+<span class="sg-p1" id="p1n">PLAYER_A</span><span id="s1a">0</span><span id="s2a">-</span><span id="s3a">-</span><span id="pta" class="sg-cur">0</span><span id="ga">0</span>
+<span class="sg-p2" id="p2n">PLAYER_B</span><span id="s1b">0</span><span id="s2b">-</span><span id="s3b">-</span><span id="ptb">0</span><span id="gb">0</span>
+</div>
+<div class="serve-row">SERVE: <span id="serveinfo">--</span> &nbsp; SPEED: <span id="servespd">--- km/h</span> &nbsp; SPIN: <span id="serverspin">---</span></div>
+</div>
+<div class="events-panel">
+<div class="ev-title">&gt; inject_event.sh --manual</div>
+<div class="btn-row">
+<button class="cmd ace" onclick="ev('ace')">ACE()</button>
+<button class="cmd ace" onclick="ev('win_a')">WINNER_A()</button>
+<button class="cmd" onclick="ev('win_b')">WINNER_B()</button>
+<button class="cmd" onclick="ev('df')">DOUBLE_FAULT()</button>
+<button class="cmd danger" onclick="ev('brk_a')">BREAK_A()</button>
+<button class="cmd danger" onclick="ev('brk_b')">BREAK_B()</button>
+<button class="cmd ace" onclick="ev('set_a')">SET_WIN_A()</button>
+<button class="cmd" onclick="ev('set_b')">SET_WIN_B()</button>
+<button class="cmd danger" onclick="rst()">RESET()</button>
+</div>
+</div>
+<div class="terminal-log" id="tlog"></div>
+</div>
+</div>
+<script>
+var CW,CH,W2,H2;
+var cc=document.getElementById("court"),pc=document.getElementById("probchart");
+var cx=cc.getContext("2d"),px=pc.getContext("2d");
+var G="#33ff33",DG="#1a8c1a",BG="#0a0a0a",DIM="#0d2b0d",BRD="#1f4d1f";
+var probA=0.5,pHist=[0.5],tick=0,rall=0;
+var pts=["0","15","30","40","ADV"],ptA=0,ptB=0,gameA=0,gameB=0;
+var sets=[[0,0],[0,0],[0,0]],curSet=0;
+var serveA=true;
+var ball={x:.5,y:.5,vx:0.006,vy:0.005,trail:[]};
+var shots=[];
+var logCount=0;
+function rz(){
+  var cw=cc.parentElement.clientWidth-32;
+  var ch=cc.parentElement.clientHeight-32;
+  var ar=1.5;
+  if(cw/ch>ar){CW=Math.round(ch*ar);CH=ch;}else{CW=cw;CH=Math.round(cw/ar);}
+  cc.width=CW; cc.height=CH;
+  pc.width=pc.parentElement.clientWidth; pc.height=100;
+  W2=pc.width;
+}
+function drawCourt(){
+  cx.fillStyle=BG; cx.fillRect(0,0,CW,CH);
+  var pw=CW*.85,ph=CH*.9,ox=(CW-pw)/2,oy=(CH-ph)/2;
+  cx.strokeStyle=BRD; cx.lineWidth=1;
+  cx.strokeRect(ox,oy,pw,ph);
+  cx.beginPath(); cx.moveTo(ox,oy+ph/2); cx.lineTo(ox+pw,oy+ph/2); cx.strokeStyle=BRD; cx.lineWidth=1; cx.stroke();
+  var sw=pw*.1;
+  cx.strokeRect(ox+sw,oy,pw-sw*2,ph);
+  var sl=ph*.08;
+  cx.strokeRect(ox+sw,oy+sl,pw-sw*2,ph-sl*2);
+  cx.beginPath(); cx.moveTo(ox+pw/2,oy+sl); cx.lineTo(ox+pw/2,oy+ph-sl); cx.stroke();
+  cx.beginPath(); cx.moveTo(ox,oy+ph/2); cx.lineTo(ox+pw,oy+ph/2);
+  cx.strokeStyle="#0d400d"; cx.lineWidth=2; cx.stroke();
+  var netH=10;
+  for(var i=0;i<=12;i++){
+    var nx=ox+pw/2;
+    var ny=oy+ph/2-netH/2+i*(netH/12);
+    cx.beginPath(); cx.moveTo(nx-1,ny); cx.lineTo(nx+1,ny);
+    cx.strokeStyle="rgba(51,255,51,.3)"; cx.lineWidth=1; cx.stroke();
+  }
+  cx.strokeStyle=BRD; cx.lineWidth=1;
+  var labels=[["T","Ad","Ad","T"],["T","Ad","Ad","T"]];
+  cx.font="9px Share Tech Mono,monospace"; cx.fillStyle="#0d400d"; cx.textAlign="center";
+  cx.fillText("P1",ox+pw*.25,oy+ph*.75);
+  cx.fillText("P2",ox+pw*.75,oy+ph*.25);
+  shots.forEach(function(s){
+    var age=tick-s.t;
+    if(age>120)return;
+    var alpha=Math.max(0,1-age/120);
+    cx.beginPath();
+    cx.moveTo(ox+s.x1*pw,oy+s.y1*ph);
+    cx.lineTo(ox+s.x2*pw,oy+s.y2*ph);
+    cx.strokeStyle=s.ace?"rgba(51,255,51,"+alpha*0.9+")":"rgba(26,140,26,"+alpha*0.7+")";
+    cx.lineWidth=s.ace?2:1.5;
+    cx.stroke();
+    if(s.ace){
+      cx.beginPath(); cx.arc(ox+s.x2*pw,oy+s.y2*ph,4,0,Math.PI*2);
+      cx.fillStyle="rgba(51,255,51,"+alpha+")"; cx.fill();
+    }
+  });
+  if(ball.trail.length>1){
+    for(var i=1;i<ball.trail.length;i++){
+      var a=(i/ball.trail.length)*0.5;
+      cx.beginPath();
+      cx.moveTo(ox+ball.trail[i-1].x*pw,oy+ball.trail[i-1].y*ph);
+      cx.lineTo(ox+ball.trail[i].x*pw,oy+ball.trail[i].y*ph);
+      cx.strokeStyle="rgba(51,255,51,"+a+")"; cx.lineWidth=1.5; cx.stroke();
+    }
+  }
+  var bx=ox+ball.x*pw,by=oy+ball.y*ph;
+  cx.beginPath(); cx.arc(bx,by,4,0,Math.PI*2);
+  cx.fillStyle=G; cx.fill();
+  cx.beginPath(); cx.arc(bx,by,7,0,Math.PI*2);
+  cx.strokeStyle="rgba(51,255,51,.3)"; cx.lineWidth=1; cx.stroke();
+  var grid=8;
+  for(var gx=0;gx<=grid;gx++){
+    for(var gy=0;gy<=grid;gy++){
+      cx.beginPath();
+      cx.arc(ox+gx*(pw/grid),oy+gy*(ph/grid),1,0,Math.PI*2);
+      cx.fillStyle="rgba(26,77,26,.4)"; cx.fill();
+    }
+  }
+}
+function drawChart(){
+  px.fillStyle="#0a0a0a"; px.fillRect(0,0,W2,100);
+  for(var g=0;g<=4;g++){
+    var gy=8+g*(84/4);
+    px.strokeStyle=BRD; px.lineWidth=1;
+    px.beginPath(); px.moveTo(30,gy); px.lineTo(W2,gy); px.stroke();
+  }
+  px.fillStyle=DG; px.font="9px Share Tech Mono,monospace"; px.textAlign="right";
+  ["1.0","0.75","0.5","0.25","0.0"].forEach(function(t,i){px.fillText(t,28,8+i*(84/4)+3);});
+  if(pHist.length>1){
+    var n=pHist.length,xs=(W2-32)/Math.max(60,n);
+    px.beginPath();
+    pHist.forEach(function(v,i){
+      var xp=30+i*xs, yp=8+(1-v)*84;
+      if(i===0)px.moveTo(xp,yp);else px.lineTo(xp,yp);
+    });
+    px.strokeStyle=G; px.lineWidth=1.5; px.stroke();
+    px.beginPath();
+    pHist.forEach(function(v,i){var xp=30+i*xs,yp=8+(1-v)*84; if(i===0)px.moveTo(xp,yp);else px.lineTo(xp,yp);});
+    px.lineTo(30+(n-1)*xs,92); px.lineTo(30,92); px.closePath();
+    var fg=px.createLinearGradient(0,8,0,92);
+    fg.addColorStop(0,"rgba(51,255,51,.2)"); fg.addColorStop(1,"rgba(51,255,51,.01)");
+    px.fillStyle=fg; px.fill();
+    var lx=30+(n-1)*xs,ly=8+(1-pHist[n-1])*84;
+    px.beginPath(); px.arc(lx,ly,3,0,Math.PI*2);
+    px.fillStyle=G; px.fill();
+    px.fillStyle=G; px.font="bold 10px Share Tech Mono,monospace"; px.textAlign="left";
+    px.fillText((probA*100).toFixed(1)+"%",lx+6,ly+4);
+  }
+  px.fillStyle=DG; px.font="9px Share Tech Mono,monospace"; px.textAlign="left";
+  px.fillText("P1_WIN%",32,96);
+}
+var ptMap=["0","15","30","40","A"];
+function updateScore(){
+  document.getElementById("pta").textContent=ptMap[ptA]||"A";
+  document.getElementById("ptb").textContent=ptMap[ptB]||"A";
+  document.getElementById("ga").textContent=gameA;
+  document.getElementById("gb").textContent=gameB;
+  sets.forEach(function(s,i){
+    var ia=["s1a","s2a","s3a"][i],ib=["s1b","s2b","s3b"][i];
+    document.getElementById(ia).textContent=i<=curSet?s[0]:"-";
+    document.getElementById(ib).textContent=i<=curSet?s[1]:"-";
+  });
+  document.getElementById("serveinfo").textContent=(serveA?"P1":"P2")+"_SERVE";
+  var spd=serveA?Math.round(180+Math.random()*60):Math.round(160+Math.random()*55);
+  document.getElementById("servespd").textContent=spd+" km/h";
+  var spins=["FLAT","TOPSPIN","SLICE","KICK"];
+  document.getElementById("serverspin").textContent=spins[Math.floor(Math.random()*spins.length)];
+  var m=Math.round(probA*100);
+  document.getElementById("mombar").style.width=m+"%";
+  document.getElementById("momval").textContent=m+"%";
+  document.getElementById("cpu").textContent=Math.round(10+Math.random()*5)+"%";
+}
+var ts=Date.now();
+function fmtTime(){var d=new Date(Date.now()-ts);var m=String(Math.floor(d/60000)).padStart(2,"0");var s=String(Math.floor((d%60000)/1000)).padStart(2,"0");return m+":"+s;}
+function log(txt,cls){
+  var el=document.getElementById("tlog");
+  var d=document.createElement("div");d.className="log-line";
+  var t=document.createElement("span");t.className="log-ts";t.textContent="["+fmtTime()+"]";
+  var pr=document.createElement("span");pr.className="log-prompt";pr.textContent=" $ ";
+  var tx=document.createElement("span");tx.className="log-txt "+(cls||"");tx.textContent=txt;
+  d.appendChild(t);d.appendChild(pr);d.appendChild(tx);
+  el.insertBefore(d,el.firstChild);
+  logCount++;
+  if(logCount>60){var kids=el.children;if(kids.length>60)el.removeChild(kids[kids.length-1]);}
+}
+function c01(v){return Math.max(.01,Math.min(.99,v));}
+function fireShotViz(fromA,ace){
+  var x1,y1,x2,y2;
+  if(fromA){x1=.1+Math.random()*.3;y1=.5+Math.random()*.4;}
+  else{x1=.6+Math.random()*.3;y1=.1+Math.random()*.4;}
+  x2=fromA?(.5+Math.random()*.45):(.05+Math.random()*.45);
+  y2=Math.random();
+  shots.push({x1:x1,y1:y1,x2:x2,y2:y2,t:tick,ace:ace||false});
+  ball.trail=[];
+  ball.x=x1;ball.y=y1;
+  ball.vx=(x2-x1)/40;ball.vy=(y2-y1)/40;
+}
+function pointWon(byA){
+  if(byA){
+    ptA++;
+    if(ptA>=4&&ptA>ptB+1){ptA=0;ptB=0;gameA++;probA=c01(probA+.06+Math.random()*.03);}
+    else if(ptA>=4&&ptB>=4&&ptA===ptB+1){log("ADVANTAGE P1","hi");}
+    else probA=c01(probA+.035+Math.random()*.02);
+  }else{
+    ptB++;
+    if(ptB>=4&&ptB>ptA+1){ptA=0;ptB=0;gameB++;probA=c01(probA-.06-Math.random()*.03);}
+    else if(ptB>=4&&ptA>=4&&ptB===ptA+1){log("ADVANTAGE P2","warn");}
+    else probA=c01(probA-.035-Math.random()*.02);
+  }
+  pHist.push(probA);
+  if(pHist.length>120)pHist.shift();
+  serveA=!serveA;
+  updateScore();
+}
+function ev(t){
+  if(t==="ace"){
+    fireShotViz(serveA,true);
+    var spd=Math.round(200+Math.random()*30);
+    log("ACE() >> "+spd+" km/h | point_awarded="+( serveA?"P1":"P2"),"ace");
+    pointWon(serveA);
+  }else if(t==="win_a"){
+    fireShotViz(true,false);
+    var types=["CROSS_COURT","DOWN_LINE","PASSING_SHOT","LOB"];
+    log("WINNER_A() >> type="+types[Math.floor(Math.random()*types.length)],"hi");
+    pointWon(true);
+  }else if(t==="win_b"){
+    fireShotViz(false,false);
+    log("WINNER_B() >> point_awarded=P2","");
+    pointWon(false);
+  }else if(t==="df"){
+    log("DOUBLE_FAULT() >> fault_server="+(serveA?"P1":"P2"),"err");
+    pointWon(!serveA);
+  }else if(t==="brk_a"){
+    log("BREAK_A() >> !!! BREAK OF SERVE P2 !!!","err");
+    probA=c01(probA+.15); pHist.push(probA);
+    gameA++; ptA=0;ptB=0; updateScore();
+  }else if(t==="brk_b"){
+    log("BREAK_B() >> !!! BREAK OF SERVE P1 !!!","err");
+    probA=c01(probA-.15); pHist.push(probA);
+    gameB++; ptA=0;ptB=0; updateScore();
+  }else if(t==="set_a"){
+    sets[curSet][0]=gameA; sets[curSet][1]=gameB;
+    log("SET_WIN_A() >> P1 wins set "+(curSet+1)+" ["+gameA+"-"+gameB+"]","ace");
+    if(curSet<2){curSet++;gameA=0;gameB=0;ptA=0;ptB=0;}
+    probA=c01(probA+.1); pHist.push(probA); updateScore();
+  }else if(t==="set_b"){
+    sets[curSet][0]=gameA; sets[curSet][1]=gameB;
+    log("SET_WIN_B() >> P2 wins set "+(curSet+1)+" ["+gameA+"-"+gameB+"]","warn");
+    if(curSet<2){curSet++;gameA=0;gameB=0;ptA=0;ptB=0;}
+    probA=c01(probA-.1); pHist.push(probA); updateScore();
+  }
+}
+function rst(){
+  probA=.5;pHist=[.5];ptA=0;ptB=0;gameA=0;gameB=0;
+  sets=[[0,0],[0,0],[0,0]];curSet=0;serveA=true;shots=[];ball.trail=[];
+  ball.x=.5;ball.y=.5;ball.vx=.006;ball.vy=.005;ts=Date.now();
+  document.getElementById("tlog").innerHTML="";logCount=0;
+  log("RESET() >> match_state cleared","warn");
+  updateScore();
+}
+function updateBall(){
+  ball.trail.push({x:ball.x,y:ball.y});
+  if(ball.trail.length>18)ball.trail.shift();
+  ball.x+=ball.vx+(Math.random()-.5)*.001;
+  ball.y+=ball.vy+(Math.random()-.5)*.001;
+  if(ball.x<.02||ball.x>.98){ball.vx*=-1;ball.x=Math.max(.02,Math.min(.98,ball.x));}
+  if(ball.y<.02||ball.y>.98){ball.vy*=-1;ball.y=Math.max(.02,Math.min(.98,ball.y));}
+  ball.vx+=(Math.random()-.5)*.0008;ball.vy+=(Math.random()-.5)*.0008;
+  ball.vx=Math.max(-.012,Math.min(.012,ball.vx));
+  ball.vy=Math.max(-.012,Math.min(.012,ball.vy));
+}
+var autoTypes=["ace","win_a","win_b","win_a","win_b","df","win_a","win_a","win_b"];
+function loop(){
+  tick++;
+  rall++;
+  if(rall>0&&rall%380===0){
+    var t=autoTypes[Math.floor(Math.random()*autoTypes.length)];
+    ev(t);
+    rall=0;
+  }
+  if(tick%90===0){
+    var d=(Math.random()-.5)*.008;
+    probA=c01(probA+d);
+    pHist.push(probA);
+    if(pHist.length>120)pHist.shift();
+  }
+  updateBall();
+  drawCourt();
+  drawChart();
+  requestAnimationFrame(loop);
+}
+window.addEventListener("resize",function(){rz();});
+rz();
+log("tennis.exe -- process started","hi");
+log("loading match_analyzer module...","");
+log("ball_tracker: ACTIVE","hi");
+log("probability_engine: ONLINE","hi");
+log("awaiting first serve...","warn");
+updateScore();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
